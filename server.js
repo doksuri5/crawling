@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import { CronJob } from "cron";
 
 import connectDB from "./database/db.js";
-import { main } from "./cron-job/search-news-db.js";
+import { main } from "./cron-job/crawling-news-db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
