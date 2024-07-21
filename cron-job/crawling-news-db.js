@@ -1,8 +1,8 @@
 import * as puppeteer from "puppeteer";
-import ProgressBar from "progress";
 import connectDB from "../database/db.js";
 import News from "../schemas/news-schema.js";
 import { formatDate } from "../utils/formatDate.js";
+import { getKoreanTime } from "../utils/getKoreanTime.js";
 
 const stock_list = [
   { 애플: "AAPL.O" },
@@ -37,6 +37,11 @@ const scrollPage = async (page) => {
 };
 
 const getTranslatedContent = async (link, language, query) => {
+  const browser = await puppeteer.launch({
+    headless: false,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
   const page = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1080 });
   await page.setRequestInterception(true);
@@ -144,7 +149,7 @@ const getTranslatedContent = async (link, language, query) => {
     }
   }
 
-  await page.close();
+  await browser.close();
   return { lang: language.lang, data: result };
 };
 
@@ -170,14 +175,53 @@ const getSearchNews = async (query) => {
     { lang: "ch", buttonSelector: ".translate-btn.cn", publisher: "韩联社 Infomax" },
   ];
 
-  const results = [];
+  const translatedContentPromises = languages.map((language) => getTranslatedContent(url, language, query));
 
-  for (const language of languages) {
-    const translatedContent = await getTranslatedContent(url, language, query);
-    results.push(...translatedContent.data);
-  }
+  const fetchWithRetry = async (promise, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+      const result = await promise;
+      if (result.status === "fulfilled") {
+        return result;
+      }
+    }
+    return { status: "rejected", reason: "Retries exhausted" };
+  };
 
-  return results;
+  const translatedContents = await Promise.allSettled(translatedContentPromises);
+
+  // 재시도 로직 추가
+  const retriedContents = await Promise.all(
+    translatedContents.map((result) => {
+      if (result.status === "rejected") {
+        const retryPromise = fetchWithRetry(result, 3);
+        return retryPromise;
+      }
+      return result;
+    })
+  );
+
+  console.log(retriedContents);
+
+  const mergedResults = retriedContents.reduce((acc, curr) => {
+    if (curr.status === "fulfilled") {
+      curr.value.data.forEach((item) => {
+        const existingItem = acc.find((i) => i.index === item.index);
+        if (existingItem) {
+          existingItem.publisher = { ...existingItem.publisher, ...item.publisher };
+          existingItem.title = { ...existingItem.title, ...item.title };
+          existingItem.description = { ...existingItem.description, ...item.description };
+          existingItem.content = { ...existingItem.content, ...item.content };
+        } else {
+          acc.push(item);
+        }
+      });
+    } else {
+      console.error(`Failed to fetch data: ${curr.reason}`);
+    }
+    return acc;
+  }, []);
+
+  return mergedResults;
 };
 
 const addNewsToDatabase = async (newsDataList) => {
@@ -212,16 +256,15 @@ const addNewsToDatabase = async (newsDataList) => {
   }
 };
 
-const main = async (browser) => {
+const main = async () => {
   const queries = ["애플", "마이크로소프트", "아마존", "테슬라", "유니티", "구글"];
   const allResults = [];
 
-  const bar = new ProgressBar(":bar :current/:total (:percent) :etas", { total: queries.length });
-
+  console.log(`실행 시간 : ${getKoreanTime()}`);
   for (const query of queries) {
+    console.log(query);
     const result = await getSearchNews(query);
     allResults.push(...result);
-    bar.tick(); // Progress bar update
     await delay(3000);
   }
 
