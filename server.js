@@ -1,10 +1,9 @@
 import express from "express";
 import dotenv from "dotenv";
-import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { CronJob } from "cron";
-
+import puppeteer from "puppeteer";
 import connectDB from "./database/db.js";
 import { main } from "./cron-job/crawling-news-db.js";
 
@@ -20,41 +19,50 @@ if (process.env.NODE_ENV === "production") {
 const app = express();
 
 app.use(express.json());
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL,
-    credentials: true,
-  })
-);
 
 // DB 연결
 connectDB();
 
-// 작업 정의
+let browser;
+
 const executeTask = async () => {
   console.log("===================================================");
-  console.log(await main());
+  try {
+    browser = await puppeteer.launch();
+    const result = await main(browser); // 언어 전달 없이 실행
+    console.log(result);
+  } catch (error) {
+    console.error("Error executing task:", error);
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
 };
 
-await executeTask();
+const job = new CronJob("0 0,6,12,18 * * *", executeTask, null, true, "Asia/Seoul");
 
-// (async () => {
-//   await executeTask();
+job.start();
 
-//   const job = new CronJob(
-//     "*/1 * * * *",
-//     executeTask,
-//     () => {
-//       console.log("작업이 완료되었습니다.");
-//     },
-//     true, // true일 경우 서버가 재시작 되면 자동으로 다시 실행
-//     "Asia/Seoul"
-//   );
+// 프로세스 종료 시 브라우저를 강제로 닫음
+const handleExit = async () => {
+  if (browser) {
+    await browser.close();
+    console.log("Browser closed on process exit.");
+  }
+  process.exit();
+};
 
-//   job.start();
-// })();
+process.on("exit", handleExit);
+process.on("SIGINT", handleExit);
+process.on("SIGTERM", handleExit);
+process.on("uncaughtException", handleExit);
 
-// 서버 연결
-app.listen(5000, () => {
-  console.log("크롤링 서버 연결");
+const PORT = process.env.PORT || 5000;
+app.get("/", (req, res) => {
+  res.send(`크롤링 서버가 ${PORT} 포트에서 실행 중입니다.`);
+});
+
+app.listen(PORT, () => {
+  console.log(`크롤링 서버가 ${PORT} 포트에서 실행 중입니다.`);
 });

@@ -1,59 +1,14 @@
 module.exports = {
   apps: [
     {
-      name: "crawling-server-ko",
+      name: "crawling-server",
       script: "./server.js",
-      instances: 1,
-      exec_mode: "fork",
+      instances: 1, // 단일 인스턴스로 설정
+      exec_mode: "fork", // fork 모드 사용
       autorestart: true,
       watch: false,
-      max_memory_restart: "1G",
       env: {
         NODE_ENV: "production",
-        LANGUAGE: "ko",
-        INSTANCE_ID: "0",
-      },
-    },
-    {
-      name: "crawling-server-en",
-      script: "./server.js",
-      instances: 1,
-      exec_mode: "fork",
-      autorestart: true,
-      watch: false,
-      max_memory_restart: "1G",
-      env: {
-        NODE_ENV: "production",
-        LANGUAGE: "en",
-        INSTANCE_ID: "1",
-      },
-    },
-    {
-      name: "crawling-server-jp",
-      script: "./server.js",
-      instances: 1,
-      exec_mode: "fork",
-      autorestart: true,
-      watch: false,
-      max_memory_restart: "1G",
-      env: {
-        NODE_ENV: "production",
-        LANGUAGE: "jp",
-        INSTANCE_ID: "2",
-      },
-    },
-    {
-      name: "crawling-server-cn",
-      script: "./server.js",
-      instances: 1,
-      exec_mode: "fork",
-      autorestart: true,
-      watch: false,
-      max_memory_restart: "1G",
-      env: {
-        NODE_ENV: "production",
-        LANGUAGE: "ch",
-        INSTANCE_ID: "3",
       },
     },
   ],

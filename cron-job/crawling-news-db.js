@@ -37,11 +37,6 @@ const scrollPage = async (page) => {
 };
 
 const getTranslatedContent = async (link, language, query) => {
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-
   const page = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1080 });
   await page.setRequestInterception(true);
@@ -62,7 +57,7 @@ const getTranslatedContent = async (link, language, query) => {
 
   const tags = await page.evaluate(() => {
     return Array.from(document.querySelectorAll("#section-list > ul > li"))
-      .slice(0, 10)
+      .slice(0, 5)
       .map((t) => ({
         title: t.querySelector(".titles a")?.textContent.trim(),
         thumbnail_url: t.querySelector("a > img")?.src,
@@ -91,50 +86,65 @@ const getTranslatedContent = async (link, language, query) => {
       await page.goto(t.link, { waitUntil: "networkidle2" });
 
       const articleContent = await page.evaluate(() => {
-        const content = Array.from(document.querySelectorAll("#article-view-content-div p"))
-          .map((p) => p.textContent.trim())
-          .filter((text) => text.length > 0)
-          .join("\n");
+        const contentDiv = document.querySelector("#article-view-content-div");
+        const paragraphs = Array.from(contentDiv.querySelectorAll("p")).map((p) => p.textContent.trim());
 
-        const contentImg = document.querySelector("#article-view-content-div img")?.src || "";
+        const additionalText = Array.from(contentDiv.childNodes)
+          .filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent.trim())
+          .filter((text) => text.length > 0);
+
+        const content = [...paragraphs, ...additionalText].join("\n");
+        const contentImg = contentDiv.querySelector("img")?.src || "";
+
+        // (끝) 만 있는 기사를 걸러냄
+        if (content.trim() === "(끝)") {
+          return null;
+        }
+
+        if (contentImg === "") {
+          return null;
+        }
 
         return { content, contentImg };
       });
 
       const { content, contentImg } = articleContent;
 
-      let relative_stock = [];
-      if (language.lang === "ko") {
-        relative_stock = extractStockSymbols(t.title + " " + content);
-      }
-      const indexMatch = t.link.match(/idxno=(\d+)/);
-      const index = indexMatch ? indexMatch[1] : null;
+      if (articleContent) {
+        let relative_stock = [];
+        if (language.lang === "ko") {
+          relative_stock = extractStockSymbols(t.title + " " + content);
+        }
+        const indexMatch = t.link.match(/idxno=(\d+)/);
+        const index = indexMatch ? indexMatch[1] : null;
 
-      result.push({
-        index,
-        publisher: {
-          [language.lang]: language.publisher,
-        },
-        thumbnail_url: t.thumbnail_url,
-        title: {
-          [language.lang]: t.title,
-        },
-        description: {
-          [language.lang]: t.description,
-        },
-        published_time: t.published_time,
-        link: t.link,
-        content: {
-          [language.lang]: content,
-        },
-        content_img: contentImg,
-        relative_stock,
-        score: relative_stock.length,
-      });
+        result.push({
+          index,
+          publisher: {
+            [language.lang]: language.publisher,
+          },
+          thumbnail_url: t.thumbnail_url,
+          title: {
+            [language.lang]: t.title,
+          },
+          description: {
+            [language.lang]: t.description,
+          },
+          published_time: t.published_time,
+          link: t.link,
+          content: {
+            [language.lang]: content,
+          },
+          content_img: contentImg,
+          relative_stock,
+          score: relative_stock.length,
+        });
+      }
     }
   }
 
-  await browser.close();
+  await page.close();
   return { lang: language.lang, data: result };
 };
 
@@ -160,53 +170,14 @@ const getSearchNews = async (query) => {
     { lang: "ch", buttonSelector: ".translate-btn.cn", publisher: "韩联社 Infomax" },
   ];
 
-  const translatedContentPromises = languages.map((language) => getTranslatedContent(url, language, query));
+  const results = [];
 
-  const fetchWithRetry = async (promise, retries = 3) => {
-    for (let i = 0; i < retries; i++) {
-      const result = await promise;
-      if (result.status === "fulfilled") {
-        return result;
-      }
-    }
-    return { status: "rejected", reason: "Retries exhausted" };
-  };
+  for (const language of languages) {
+    const translatedContent = await getTranslatedContent(url, language, query);
+    results.push(...translatedContent.data);
+  }
 
-  const translatedContents = await Promise.allSettled(translatedContentPromises);
-
-  // 재시도 로직 추가
-  const retriedContents = await Promise.all(
-    translatedContents.map((result) => {
-      if (result.status === "rejected") {
-        const retryPromise = fetchWithRetry(result, 3);
-        return retryPromise;
-      }
-      return result;
-    })
-  );
-
-  console.log(retriedContents);
-
-  const mergedResults = retriedContents.reduce((acc, curr) => {
-    if (curr.status === "fulfilled") {
-      curr.value.data.forEach((item) => {
-        const existingItem = acc.find((i) => i.index === item.index);
-        if (existingItem) {
-          existingItem.publisher = { ...existingItem.publisher, ...item.publisher };
-          existingItem.title = { ...existingItem.title, ...item.title };
-          existingItem.description = { ...existingItem.description, ...item.description };
-          existingItem.content = { ...existingItem.content, ...item.content };
-        } else {
-          acc.push(item);
-        }
-      });
-    } else {
-      console.error(`Failed to fetch data: ${curr.reason}`);
-    }
-    return acc;
-  }, []);
-
-  return mergedResults;
+  return results;
 };
 
 const addNewsToDatabase = async (newsDataList) => {
@@ -241,7 +212,7 @@ const addNewsToDatabase = async (newsDataList) => {
   }
 };
 
-const main = async () => {
+const main = async (browser) => {
   const queries = ["애플", "마이크로소프트", "아마존", "테슬라", "유니티", "구글"];
   const allResults = [];
 
