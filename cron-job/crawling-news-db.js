@@ -38,7 +38,7 @@ const scrollPage = async (page) => {
 
 const getTranslatedContent = async (link, language, query) => {
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: 'new',
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
