@@ -38,7 +38,7 @@ const scrollPage = async (page) => {
 
 const getTranslatedContent = async (link, language, query) => {
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: process.env.HEADLESS,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
@@ -55,14 +55,18 @@ const getTranslatedContent = async (link, language, query) => {
 
   await page.goto(link, { waitUntil: "networkidle2" });
 
-  await page.waitForSelector(language.buttonSelector, { visible: true });
-  await page.click(language.buttonSelector);
+  // 언어 설정 및 새로고침
+  await page.evaluate((language) => {
+    document.cookie = `googtrans=/ko/${language.lang_cookie}`;
+  }, language);
+  await page.reload({ waitUntil: "networkidle2" });
   await delay(3000);
+
   await scrollPage(page);
 
   const tags = await page.evaluate(() => {
     return Array.from(document.querySelectorAll("#section-list > ul > li"))
-      .slice(0, 10)
+      .slice(0, 5)
       .map((t) => ({
         title: t.querySelector(".titles a")?.textContent.trim(),
         thumbnail_url: t.querySelector("a > img")?.src,
@@ -145,64 +149,37 @@ const getSearchNews = async (query) => {
   const todayFormatted = formatDate(today);
   const yearStartFormatted = formatDate(yearStart);
 
-  // sc_section_code=S1N21 (해외주식) 빈 값이면 전체
-  // sc_area=A (검색영역 A: 전체, T: 제목+부제목, B: 본문)
-  // sc_order_by=E
-  // view_type=sm
   const url = `https://news.einfomax.co.kr/news/articleList.html?page=1&sc_section_code=&sc_area=A&sc_level=&sc_article_type=&sc_sdate=${yearStartFormatted}&sc_edate=${todayFormatted}&sc_serial_number=&sc_word=${encodeURI(
     query
   )}&box_idxno=&sc_order_by=E&view_type=sm`;
 
   const languages = [
-    { lang: "ko", buttonSelector: ".translate-btn.kr", publisher: "연합 인포맥스" },
-    { lang: "en", buttonSelector: ".translate-btn.en", publisher: "Yonhap Infomax" },
-    { lang: "jp", buttonSelector: ".translate-btn.jp", publisher: "連合インフォマックス" },
-    { lang: "ch", buttonSelector: ".translate-btn.cn", publisher: "韩联社 Infomax" },
+    { lang: "ko", lang_cookie: "ko", buttonSelector: ".translate-btn.kr", publisher: "연합 인포맥스" },
+    { lang: "en", lang_cookie: "en", buttonSelector: ".translate-btn.en", publisher: "Yonhap Infomax" },
+    { lang: "jp", lang_cookie: "ja", buttonSelector: ".translate-btn.jp", publisher: "連合インフォマックス" },
+    { lang: "ch", lang_cookie: "zh-CN", buttonSelector: ".translate-btn.cn", publisher: "韩联社 Infomax" },
   ];
 
-  const translatedContentPromises = languages.map((language) => getTranslatedContent(url, language, query));
+  const allResults = [];
 
-  const fetchWithRetry = async (promise, retries = 3) => {
-    for (let i = 0; i < retries; i++) {
-      const result = await promise;
-      if (result.status === "fulfilled") {
-        return result;
+  for (const language of languages) {
+    const translatedContent = await getTranslatedContent(url, language, query);
+    allResults.push(translatedContent);
+    await delay(2000); // 언어 변경 후 딜레이
+  }
+
+  const mergedResults = allResults.reduce((acc, curr) => {
+    curr.data.forEach((item) => {
+      const existingItem = acc.find((i) => i.index === item.index);
+      if (existingItem) {
+        existingItem.publisher = { ...existingItem.publisher, ...item.publisher };
+        existingItem.title = { ...existingItem.title, ...item.title };
+        existingItem.description = { ...existingItem.description, ...item.description };
+        existingItem.content = { ...existingItem.content, ...item.content };
+      } else {
+        acc.push(item);
       }
-    }
-    return { status: "rejected", reason: "Retries exhausted" };
-  };
-
-  const translatedContents = await Promise.allSettled(translatedContentPromises);
-
-  // 재시도 로직 추가
-  const retriedContents = await Promise.all(
-    translatedContents.map((result) => {
-      if (result.status === "rejected") {
-        const retryPromise = fetchWithRetry(result, 3);
-        return retryPromise;
-      }
-      return result;
-    })
-  );
-
-  console.log(retriedContents);
-
-  const mergedResults = retriedContents.reduce((acc, curr) => {
-    if (curr.status === "fulfilled") {
-      curr.value.data.forEach((item) => {
-        const existingItem = acc.find((i) => i.index === item.index);
-        if (existingItem) {
-          existingItem.publisher = { ...existingItem.publisher, ...item.publisher };
-          existingItem.title = { ...existingItem.title, ...item.title };
-          existingItem.description = { ...existingItem.description, ...item.description };
-          existingItem.content = { ...existingItem.content, ...item.content };
-        } else {
-          acc.push(item);
-        }
-      });
-    } else {
-      console.error(`Failed to fetch data: ${curr.reason}`);
-    }
+    });
     return acc;
   }, []);
 
@@ -242,7 +219,7 @@ const addNewsToDatabase = async (newsDataList) => {
 };
 
 const main = async () => {
-  const queries = ["애플", "마이크로소프트", "아마존", "테슬라", "유니티", "구글"];
+  const queries = ["애플"];
   const allResults = [];
 
   const bar = new ProgressBar(":bar :current/:total (:percent) :etas", { total: queries.length });
