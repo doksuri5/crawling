@@ -1,8 +1,8 @@
 import * as puppeteer from "puppeteer";
-import ProgressBar from "progress";
 import connectDB from "../database/db.js";
 import News from "../schemas/news-schema.js";
 import { formatDate } from "../utils/formatDate.js";
+import { getKoreanTime } from "../utils/getKoreanTime.js";
 
 const stock_list = [
   { 애플: "AAPL.O" },
@@ -95,46 +95,61 @@ const getTranslatedContent = async (link, language, query) => {
       await page.goto(t.link, { waitUntil: "networkidle2" });
 
       const articleContent = await page.evaluate(() => {
-        const content = Array.from(document.querySelectorAll("#article-view-content-div p"))
-          .map((p) => p.textContent.trim())
-          .filter((text) => text.length > 0)
-          .join("\n");
+        const contentDiv = document.querySelector("#article-view-content-div");
+        const paragraphs = Array.from(contentDiv.querySelectorAll("p")).map((p) => p.textContent.trim());
 
-        const contentImg = document.querySelector("#article-view-content-div img")?.src || "";
+        const additionalText = Array.from(contentDiv.childNodes)
+          .filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent.trim())
+          .filter((text) => text.length > 0);
+
+        const content = [...paragraphs, ...additionalText].join("\n");
+        const contentImg = contentDiv.querySelector("img")?.src || "";
+
+        // (끝) 만 있는 기사를 걸러냄
+        if (content.trim() === "(끝)") {
+          return null;
+        }
+
+        if (contentImg === "") {
+          return null;
+        }
 
         return { content, contentImg };
       });
 
       const { content, contentImg } = articleContent;
 
-      let relative_stock = [];
-      if (language.lang === "ko") {
-        relative_stock = extractStockSymbols(t.title + " " + content);
-      }
-      const indexMatch = t.link.match(/idxno=(\d+)/);
-      const index = indexMatch ? indexMatch[1] : null;
+      if (articleContent) {
+        let relative_stock = [];
+        if (language.lang === "ko") {
+          relative_stock = extractStockSymbols(t.title + " " + content);
+        }
+        const indexMatch = t.link.match(/idxno=(\d+)/);
+        const index = indexMatch ? indexMatch[1] : null;
 
-      result.push({
-        index,
-        publisher: {
-          [language.lang]: language.publisher,
-        },
-        thumbnail_url: t.thumbnail_url,
-        title: {
-          [language.lang]: t.title,
-        },
-        description: {
-          [language.lang]: t.description,
-        },
-        published_time: t.published_time,
-        link: t.link,
-        content: {
-          [language.lang]: content,
-        },
-        content_img: contentImg,
-        relative_stock,
-        score: relative_stock.length,
-      });
+        result.push({
+          index,
+          publisher: {
+            [language.lang]: language.publisher,
+          },
+          thumbnail_url: t.thumbnail_url,
+          title: {
+            [language.lang]: t.title,
+          },
+          description: {
+            [language.lang]: t.description,
+          },
+          published_time: t.published_time,
+          link: t.link,
+          content: {
+            [language.lang]: content,
+          },
+          content_img: contentImg,
+          relative_stock,
+          score: relative_stock.length,
+        });
+      }
     }
   }
 
@@ -222,12 +237,11 @@ const main = async () => {
   const queries = ["애플"];
   const allResults = [];
 
-  const bar = new ProgressBar(":bar :current/:total (:percent) :etas", { total: queries.length });
-
+  console.log(`실행 시간 : ${getKoreanTime()}`);
   for (const query of queries) {
+    console.log(query);
     const result = await getSearchNews(query);
     allResults.push(...result);
-    bar.tick(); // Progress bar update
     await delay(3000);
   }
 
