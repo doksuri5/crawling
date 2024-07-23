@@ -37,7 +37,7 @@ const job = new CronJob(
   "Asia/Seoul"
 );
 
-// job.start();
+job.start();
 
 // 서버 시작 시 즉시 실행
 (async () => {

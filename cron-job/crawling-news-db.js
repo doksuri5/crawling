@@ -234,10 +234,10 @@ const addNewsToDatabase = async (newsDataList) => {
 };
 
 const main = async () => {
-  const queries = ["애플"];
+  const queries = ["애플", "테슬라", "아마존", "마이크로소프트", "구글", "유니티"];
   const allResults = [];
 
-  console.log(`실행 시간 : ${getKoreanTime()}`);
+  console.log(`실행 시작 시간 : ${getKoreanTime()}`);
   for (const query of queries) {
     console.log(query);
     const result = await getSearchNews(query);
@@ -247,6 +247,7 @@ const main = async () => {
 
   // 데이터베이스에 추가
   await addNewsToDatabase(allResults);
+  console.log(`실행 종료 시간 : ${getKoreanTime()}`);
 };
 
 export { main };
