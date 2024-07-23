@@ -1,6 +1,5 @@
 import express from "express";
 import dotenv from "dotenv";
-import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { CronJob } from "cron";
@@ -20,12 +19,6 @@ if (process.env.NODE_ENV === "production") {
 const app = express();
 
 app.use(express.json());
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL,
-    credentials: true,
-  })
-);
 
 // DB 연결
 connectDB();
@@ -55,6 +48,6 @@ await executeTask();
 // })();
 
 // 서버 연결
-app.listen(5000, () => {
+app.listen(process.env.PORT, () => {
   console.log("크롤링 서버 연결");
 });
