@@ -133,16 +133,17 @@ const getTranslatedContent = async (link, language, query) => {
       const { content, contentImg } = articleContent;
 
       if (articleContent) {
-        let relative_stock = [];
-        if (language.lang === "ko") {
-          relative_stock = extractStockSymbols(t.title + " " + content);
-        }
-
         const indexMatch = t.link.match(/idxno=(\d+)/);
         const index = indexMatch ? indexMatch[1] : null;
-
         const isNewsDB = await News.findOne({ index });
+        
         if (!isNewsDB) {
+        
+          let relative_stock = [];
+          if (language.lang === "ko") {
+            relative_stock = extractStockSymbols(t.title + " " + content);
+          }
+        
           // 번역 추가
           const translatedTitle = language.lang === "fr" ? await translateTextFn(t.title) : t.title;
           const translatedDescription = language.lang === "fr" ? await translateTextFn(t.description) : t.description;
