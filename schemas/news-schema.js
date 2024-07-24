@@ -7,7 +7,7 @@ const NewsSchema = new mongoose.Schema({
     en: { type: String, required: true },
     ch: { type: String, required: true },
     jp: { type: String, required: true },
-    // fr: { type: String, required: true },
+    fr: { type: String, required: true },
   },
   thumbnail_url: { type: String, required: true },
   title: {
@@ -15,14 +15,14 @@ const NewsSchema = new mongoose.Schema({
     en: { type: String, required: true },
     ch: { type: String, required: true },
     jp: { type: String, required: true },
-    // fr: { type: String, required: true },
+    fr: { type: String, required: true },
   },
   description: {
     ko: { type: String, required: true },
     en: { type: String, required: true },
     ch: { type: String, required: true },
     jp: { type: String, required: true },
-    // fr: { type: String, required: true },
+    fr: { type: String, required: true },
   },
   published_time: { type: String, required: true },
   link: { type: String, required: true },
@@ -31,7 +31,7 @@ const NewsSchema = new mongoose.Schema({
     en: { type: String, required: true },
     ch: { type: String, required: true },
     jp: { type: String, required: true },
-    // fr: { type: String, required: true },
+    fr: { type: String, required: true },
   },
   content_img: { type: String, required: true },
   relative_stock: { type: [String] },
@@ -42,7 +42,7 @@ const NewsSchema = new mongoose.Schema({
     en: { type: String },
     ch: { type: String },
     jp: { type: String },
-    // fr: { type: String },
+    fr: { type: String },
   },
 });
 
