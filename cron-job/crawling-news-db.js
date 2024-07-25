@@ -52,6 +52,7 @@ const getTranslatedContent = async (link, language, query) => {
   const browser = await puppeteer.launch({
     headless: process.env.HEADLESS === "true" ? true : false,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    timeout: 60000, // 타임아웃을 60초로 설정
   });
 
   const page = await browser.newPage();
@@ -65,7 +66,7 @@ const getTranslatedContent = async (link, language, query) => {
     }
   });
 
-  await page.goto(link, { waitUntil: "networkidle2" });
+  await page.goto(link, { waitUntil: "networkidle2", timeout: 60000 }); // 타임아웃을 60초로 설정
 
   // 언어 설정 및 새로고침
   await page.evaluate((language) => {
@@ -104,7 +105,7 @@ const getTranslatedContent = async (link, language, query) => {
 
   for (const t of tags) {
     if (t.thumbnail_url && t.description && t.link) {
-      await page.goto(t.link, { waitUntil: "networkidle2" });
+      await page.goto(t.link, { waitUntil: "networkidle2", timeout: 60000 }); // 타임아웃을 60초로 설정
 
       const articleContent = await page.evaluate(() => {
         const contentDiv = document.querySelector("#article-view-content-div");
