@@ -48,7 +48,7 @@ const scrollPage = async (page) => {
   });
 };
 
-const getTranslatedContent = async (link, language, query) => {
+const getTranslatedContent = async (link, language, allResults) => {
   const browser = await puppeteer.launch({
     headless: process.env.HEADLESS === "true" ? true : false,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
@@ -137,39 +137,43 @@ const getTranslatedContent = async (link, language, query) => {
         const indexMatch = t.link.match(/idxno=(\d+)/);
         const index = indexMatch ? indexMatch[1] : null;
         const isNewsDB = await News.findOne({ index });
-        
+
+        console.log("현재 기사", index, "쌓인 기사", allResults);
+
+        console.log(isNewsDB, index);
         if (!isNewsDB) {
-        
-          let relative_stock = [];
-          if (language.lang === "ko") {
-            relative_stock = extractStockSymbols(t.title + " " + content);
-          }
-        
-          // 번역 추가
-          const translatedTitle = language.lang === "fr" ? await translateTextFn(t.title) : t.title;
-          const translatedDescription = language.lang === "fr" ? await translateTextFn(t.description) : t.description;
-          const translatedContent = language.lang === "fr" ? await translateTextFn(content) : content;
+          console.log("없는 기사");
+          // let relative_stock = [];
+          // if (language.lang === "ko") {
+          //   relative_stock = extractStockSymbols(t.title + " " + content);
+          // }
+
+          // // 번역 추가
+          // const translatedTitle = language.lang === "fr" ? await translateTextFn(t.title) : t.title;
+          // const translatedContent = language.lang === "fr" ? await translateTextFn(content) : content;
+
+          // const translatedDescription = language.lang === "fr" ? translatedContent.slice(0, 200) : t.description;
 
           result.push({
             index,
-            publisher: {
-              [language.lang]: language.publisher,
-            },
-            thumbnail_url: t.thumbnail_url,
-            title: {
-              [language.lang]: translatedTitle,
-            },
-            description: {
-              [language.lang]: translatedDescription,
-            },
-            published_time: t.published_time,
-            link: t.link,
-            content: {
-              [language.lang]: translatedContent,
-            },
-            content_img: contentImg,
-            relative_stock,
-            score: relative_stock.length,
+            //   publisher: {
+            //     [language.lang]: language.publisher,
+            //   },
+            //   thumbnail_url: t.thumbnail_url,
+            //   title: {
+            //     [language.lang]: translatedTitle,
+            //   },
+            //   description: {
+            //     [language.lang]: translatedDescription,
+            //   },
+            //   published_time: t.published_time,
+            //   link: t.link,
+            //   content: {
+            //     [language.lang]: translatedContent,
+            //   },
+            //   content_img: contentImg,
+            //   relative_stock,
+            //   score: relative_stock.length,
           });
         }
       }
@@ -209,7 +213,7 @@ const getSearchNews = async (query) => {
   const allResults = [];
 
   for (const language of languages) {
-    const translatedContent = await getTranslatedContent(url, language, query);
+    const translatedContent = await getTranslatedContent(url, language, allResults);
     allResults.push(translatedContent);
     await delay(2000); // 언어 변경 후 딜레이
   }
@@ -293,7 +297,7 @@ const main = async () => {
   }
 
   // 데이터베이스에 추가
-  await addNewsToDatabase(allResults);
+  // await addNewsToDatabase(allResults);
   console.log(`실행 종료 시간 : ${diffTime(getKoreanTime())}`);
 };
 
