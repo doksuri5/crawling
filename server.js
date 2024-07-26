@@ -30,14 +30,14 @@ const executeTask = async () => {
 };
 
 const job = new CronJob(
-  "0 0,6,12,18 * * *",
+  "0 0,12 * * *",
   executeTask,
   null, // onComplete 콜백은 필요 없으므로 null로 설정
   true, // true일 경우 서버가 재시작 되면 자동으로 다시 실행
   "Asia/Seoul"
 );
 
-// job.start();
+job.start();
 
 // 서버 시작 시 즉시 실행
 (async () => {
@@ -46,7 +46,10 @@ const job = new CronJob(
 
 const PORT = process.env.PORT || 5000;
 app.get("/", (req, res) => {
-  res.send(`크롤링 서버가 ${PORT} 포트에서 실행 중입니다.`);
+  res.send(`<div>
+    <p>크롤링 서버가 ${PORT} 포트에서 실행 중입니다.</p>
+    <p>v1.1.0</p>
+    </div>`);
 });
 
 // 서버 연결
