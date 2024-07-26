@@ -48,11 +48,11 @@ const scrollPage = async (page) => {
   });
 };
 
-const getTranslatedContent = async (link, language, allResults) => {
+const getTranslatedContent = async (link, language, existingIndexes) => {
   const browser = await puppeteer.launch({
     headless: process.env.HEADLESS === "true" ? true : false,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    timeout: 60000, // 타임아웃을 60초로 설정
+    timeout: 60000,
   });
 
   const page = await browser.newPage();
@@ -66,9 +66,8 @@ const getTranslatedContent = async (link, language, allResults) => {
     }
   });
 
-  await page.goto(link, { waitUntil: "networkidle2", timeout: 60000 }); // 타임아웃을 60초로 설정
+  await page.goto(link, { waitUntil: "networkidle2", timeout: 60000 });
 
-  // 언어 설정 및 새로고침
   await page.evaluate((language) => {
     document.cookie = language.lang !== "fr" ? `googtrans=/ko/${language.lang_cookie}` : `googtrans=/ko/en`;
   }, language);
@@ -105,7 +104,7 @@ const getTranslatedContent = async (link, language, allResults) => {
 
   for (const t of tags) {
     if (t.thumbnail_url && t.description && t.link) {
-      await page.goto(t.link, { waitUntil: "networkidle2", timeout: 60000 }); // 타임아웃을 60초로 설정
+      await page.goto(t.link, { waitUntil: "networkidle2", timeout: 60000 });
 
       const articleContent = await page.evaluate(() => {
         const contentDiv = document.querySelector("#article-view-content-div");
@@ -119,7 +118,6 @@ const getTranslatedContent = async (link, language, allResults) => {
         const content = [...paragraphs, ...additionalText].join("\n");
         const contentImg = contentDiv.querySelector("img")?.src || "";
 
-        // (끝) 만 있는 기사를 걸러냄
         if (content.trim() === "(끝)") {
           return null;
         }
@@ -131,51 +129,45 @@ const getTranslatedContent = async (link, language, allResults) => {
         return { content, contentImg };
       });
 
-      const { content, contentImg } = articleContent;
-
       if (articleContent) {
+        const { content, contentImg } = articleContent;
         const indexMatch = t.link.match(/idxno=(\d+)/);
         const index = indexMatch ? indexMatch[1] : null;
-        const isNewsDB = await News.findOne({ index });
 
-        console.log("현재 기사", index, "쌓인 기사", allResults);
-
-        console.log(isNewsDB, index);
-        if (!isNewsDB) {
-          console.log("없는 기사");
-          // let relative_stock = [];
-          // if (language.lang === "ko") {
-          //   relative_stock = extractStockSymbols(t.title + " " + content);
-          // }
-
-          // // 번역 추가
-          // const translatedTitle = language.lang === "fr" ? await translateTextFn(t.title) : t.title;
-          // const translatedContent = language.lang === "fr" ? await translateTextFn(content) : content;
-
-          // const translatedDescription = language.lang === "fr" ? translatedContent.slice(0, 200) : t.description;
-
-          result.push({
-            index,
-            //   publisher: {
-            //     [language.lang]: language.publisher,
-            //   },
-            //   thumbnail_url: t.thumbnail_url,
-            //   title: {
-            //     [language.lang]: translatedTitle,
-            //   },
-            //   description: {
-            //     [language.lang]: translatedDescription,
-            //   },
-            //   published_time: t.published_time,
-            //   link: t.link,
-            //   content: {
-            //     [language.lang]: translatedContent,
-            //   },
-            //   content_img: contentImg,
-            //   relative_stock,
-            //   score: relative_stock.length,
-          });
+        if (existingIndexes.includes(index)) {
+          continue;
         }
+
+        let relative_stock = [];
+        if (language.lang === "ko") {
+          relative_stock = extractStockSymbols(t.title + " " + content);
+        }
+
+        const translatedTitle = language.lang === "fr" ? await translateTextFn(t.title) : t.title;
+        const translatedContent = language.lang === "fr" ? await translateTextFn(content) : content;
+        const translatedDescription = language.lang === "fr" ? translatedContent.slice(0, 200) : t.description;
+
+        result.push({
+          index,
+          publisher: {
+            [language.lang]: language.publisher,
+          },
+          thumbnail_url: t.thumbnail_url,
+          title: {
+            [language.lang]: translatedTitle,
+          },
+          description: {
+            [language.lang]: translatedDescription,
+          },
+          published_time: t.published_time,
+          link: t.link,
+          content: {
+            [language.lang]: translatedContent,
+          },
+          content_img: contentImg,
+          relative_stock,
+          score: relative_stock.length,
+        });
       }
     }
   }
@@ -184,7 +176,7 @@ const getTranslatedContent = async (link, language, allResults) => {
   return { lang: language.lang, data: result };
 };
 
-const getSearchNews = async (query) => {
+const getSearchNews = async (query, existingIndexes) => {
   const today = new Date();
   const yearStart = new Date(today.getFullYear(), 0, 1);
 
@@ -213,7 +205,7 @@ const getSearchNews = async (query) => {
   const allResults = [];
 
   for (const language of languages) {
-    const translatedContent = await getTranslatedContent(url, language, allResults);
+    const translatedContent = await getTranslatedContent(url, language, existingIndexes);
     allResults.push(translatedContent);
     await delay(2000); // 언어 변경 후 딜레이
   }
@@ -233,7 +225,7 @@ const getSearchNews = async (query) => {
     return acc;
   }, []);
 
-  return mergedResults;
+  return mergedResults.filter((item) => !existingIndexes.includes(item.index));
 };
 
 const addNewsToDatabase = async (newsDataList) => {
@@ -270,7 +262,7 @@ const addNewsToDatabase = async (newsDataList) => {
 
 function diffTime(date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0"); // 월은 0부터 시작하므로 +1
+  const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
@@ -280,24 +272,23 @@ function diffTime(date) {
 }
 
 const main = async () => {
+  await connectDB();
   const data = await Stock.find({}, { _id: 0, stock_name: 1 });
   const queries = data.map((stock) => {
     const value = stock.stock_name;
     return value === "알파벳 Class A" ? "구글" : value === "유니티소프트웨어" ? "유니티" : value;
   });
 
-  const allResults = [];
-
   console.log(`실행 시작 시간 : ${diffTime(getKoreanTime())}`);
+
   for (const query of queries) {
     console.log(query, diffTime(getKoreanTime()));
-    const result = await getSearchNews(query);
-    allResults.push(...result);
+    const existingIndexes = await News.find({}, { index: 1 }).then((news) => news.map((n) => n.index));
+    const result = await getSearchNews(query, existingIndexes);
+    await addNewsToDatabase(result);
     await delay(3000);
   }
 
-  // 데이터베이스에 추가
-  // await addNewsToDatabase(allResults);
   console.log(`실행 종료 시간 : ${diffTime(getKoreanTime())}`);
 };
 
