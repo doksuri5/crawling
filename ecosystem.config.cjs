@@ -7,6 +7,7 @@ module.exports = {
       exec_mode: "fork", // fork 모드 사용
       autorestart: true,
       watch: false,
+      node_args: "--max-old-space-size=512", // 힙 크기 설정 추가
       env: {
         NODE_ENV: "production",
       },
