@@ -40,9 +40,9 @@ const job = new CronJob(
 job.start();
 
 // 서버 시작 시 즉시 실행
-(async () => {
-  await executeTask();
-})();
+// (async () => {
+//   await executeTask();
+// })();
 
 const PORT = process.env.PORT || 5000;
 app.get("/", (req, res) => {
