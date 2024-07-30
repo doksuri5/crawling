@@ -6,6 +6,7 @@ import { CronJob } from "cron";
 
 import connectDB from "./database/db.js";
 import { main } from "./cron-job/crawling-news-db.js";
+import { schedulePopularSearchJob } from "./cron-job/popular-search-db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,32 +24,28 @@ app.use(express.json());
 // DB 연결
 connectDB();
 
-// 작업 정의
-const executeTask = async () => {
-  console.log("===================================================");
-  console.log(await main());
-};
-
-const job = new CronJob(
+// 크롤링 스케쥴
+const crawlingJob = new CronJob(
   "0 0,12 * * *",
-  executeTask,
-  null, // onComplete 콜백은 필요 없으므로 null로 설정
-  true, // true일 경우 서버가 재시작 되면 자동으로 다시 실행
+  async () => {
+    console.log("===================================================");
+    console.log(await main());
+  },
+  null,
+  true,
   "Asia/Seoul"
 );
+crawlingJob.start();
 
-job.start();
-
-// 서버 시작 시 즉시 실행
-// (async () => {
-//   await executeTask();
-// })();
+// 인기 검색어 스케쥴
+const popularSearchJob = new CronJob("59 * * * *", schedulePopularSearchJob, null, true, "Asia/Seoul");
+popularSearchJob.start();
 
 const PORT = process.env.PORT || 5000;
 app.get("/", (req, res) => {
   res.send(`<div>
     <p>크롤링 서버가 ${PORT} 포트에서 실행 중입니다.</p>
-    <p>v1.1.0</p>
+    <p>v1.2.0</p>
     </div>`);
 });
 
